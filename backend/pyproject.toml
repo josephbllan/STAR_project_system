@@ -1,0 +1,130 @@
+[project] 
+name = "shoerag-web"
+version = "0.1.0"
+description = "Forensic footwear retrieval, web system"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "DJ", "S", "C4", "RET", "SIM"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/settings/*" = ["F403", "F405"]
+"tests/*" = ["S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main"]
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["dj_database_url.*", "fpdf", "fpdf.*", "PIL", "PIL.*", "celery", "celery.*", "django_otp.*", "axes.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "apps.*.api.*",
+    "apps.*.tasks",
+    "apps.*.services",
+    "apps.indexing.*",
+    "apps.tasks.dispatch",
+    "config.urls",
+    "config.celery",
+    "config.settings.base",
+    "retrieval.thumbnails",
+    "retrieval.encoders.*",
+    "apps.common.images",
+    "apps.common.querysets",
+]
+disallow_untyped_defs = false
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+pythonpath = ["."]
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+# `--strict-markers` above makes a mistyped marker an error rather than a silently
+# unmarked test, which is the only reason declaring them here has any force (testing.md 4).
+markers = [
+    "unit: touches no database, no filesystem and no network",
+    "integration: real database, possibly several services",
+    "ml: requires model weights on disk; excluded by the pipeline, as weights are not committed",
+    "slow: runs for more than roughly two seconds; excluded locally, never in the pipeline",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["apps", "retrieval"]
+# Executed by their nature, and a coverage figure for them means nothing (testing.md 7).
+omit = [
+    "*/migrations/*",
+    "config/settings/*",
+    "*/api/*",
+    "apps/*/tasks.py",
+    "apps/indexing/tasks.py",
+    "retrieval/thumbnails.py",
+    "retrieval/vector_store.py",
+    "apps/search/services.py",
+    "apps/indexing/adapters.py",
+]
+
+[tool.coverage.report]
+# A floor, set deliberately below what the suite reaches so that it stays a floor rather
+# than becoming a target to be gamed (testing.md 7).
+fail_under = 85
+show_missing = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.importlinter]
+root_packages = ["apps", "config", "retrieval"]
+# Required because the forbidden modules are third-party: without it `lint-imports` refuses to
+# evaluate a contract naming `django` or `celery`, and the contract that protects the port would
+# pass by never having run.
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "retrieval-is-framework-free"
+type = "forbidden"
+source_modules = ["retrieval"]
+forbidden_modules = ["django", "rest_framework", "celery", "apps", "config"]
+
+[[tool.importlinter.contracts]]
+name = "views-hold-no-logic"
+type = "forbidden"
+source_modules = ["apps.*.api"]
+forbidden_modules = ["retrieval"]
+
+# `apps.common` is a shared kernel: every app may depend on it and it may depend on none of them
+# (architecture.md 3). Stated as a contract because the principle is otherwise held only by habit,
+# and the first breach of it is always reasonable-looking - a scoping rule that "just needs the Role
+# enumeration". `ScopedQuerySet` instead asks the user object a question, which is why it can be in
+# the kernel at all.
+[[tool.importlinter.contracts]]
+name = "common-is-a-shared-kernel"
+type = "forbidden"
+source_modules = ["apps.common"]
+forbidden_modules = [
+    "apps.accounts",
+    "apps.audit",
+    "apps.cases",
+    "apps.config",
+    "apps.datasets",
+    "apps.reporting",
+    "apps.review",
+    "apps.search",
+    "apps.tasks",
+]

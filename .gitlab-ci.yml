@@ -1,0 +1,76 @@
+stages:
+  - lint
+  - test
+
+default:
+  image: python:3.12-slim
+  cache:
+    key:
+      files:
+        - backend/requirements/dev.txt
+    paths:
+      - .cache/pip
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+.python:
+  before_script:
+    - cd backend
+    - pip install --quiet -r requirements/dev.txt
+
+lint: 
+  extends: .python
+  stage: lint
+  script:
+    - ruff check .
+    - ruff format --check .
+
+types:
+  extends: .python
+  stage: lint
+  script:
+    - mypy apps config retrieval
+
+# `allow_failure` is deliberately absent from both jobs below. Both pass, and a job that runs
+# and cannot fail is a job everyone learns to ignore.
+boundaries:
+  extends: .python
+  stage: lint
+  script:
+    - lint-imports
+
+test:
+  extends: .python
+  stage: test
+  services:
+    # The same image as local composition. Tests run against a real PostgreSQL with the
+    # real extensions, never SQLite (DB-1, DB-3).
+    - name: pgvector/pgvector:pg16
+      alias: postgres
+  variables:
+    POSTGRES_DB: shoerag
+    POSTGRES_USER: shoerag_owner
+    POSTGRES_PASSWORD: ci_owner_password
+    MIGRATION_DATABASE_URL: "postgres://shoerag_owner:ci_owner_password@postgres:5432/shoerag"
+    DATABASE_URL: "postgres://shoerag_owner:ci_owner_password@postgres:5432/shoerag"
+  script:
+    - python manage.py makemigrations --check --dry-run --settings=config.settings.test
+    # No `--reuse-db`: the pipeline gets a fresh service container each run, so there is
+    # nothing to reuse and pretending otherwise would hide a broken migration.
+    - pytest -m "not ml" --cov=apps --cov=retrieval --cov-report=term-missing
+
+security:
+  extends: .python
+  stage: lint
+  script:
+    - pip install --quiet pip-audit bandit
+    - pip-audit -r requirements/base.txt
+    - bandit -q -r apps retrieval config -x '*/migrations/*'
+
+secrets:
+  stage: lint
+  image: zricethezav/gitleaks:v8.21.2
+  script:
+    - gitleaks detect --source . --no-git --redact
