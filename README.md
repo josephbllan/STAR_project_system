@@ -15,6 +15,38 @@ Ranking fuses CLIP  and DINOv2  as s_model = λ × s_DINO + (1−λ) × s_CLIP, 
 
 HTTPS requests from React to Django DRF are accepted immediately with secure layer, then Celery runs ingest, encode, search, and report jobs so the API stays non-blocking. Redis is the message broker. Job progress is stored in PostgreSQL (TaskRun), not a Celery result backend. If the worker is down, jobs queue and never finish.
 
+## Screenshots
+
+### 1. Search
+
+![Search](screenshots/1-search.png)
+
+### 2. Datasets
+
+![Datasets](screenshots/2-dataset.png)
+
+### 2. Device
+
+![Device](screenshots/2-device.png)
+
+### 3. Index
+
+![Index — register evidence](screenshots/3-index1.png)
+
+![Index — coverage](screenshots/3-index2.png)
+
+![Index — start](screenshots/3-index3.png)
+
+![Index — progress](screenshots/3-index4.png)
+
+### 4. Sessions
+
+![Sessions](screenshots/4-session1.png)
+
+### 5. Review
+
+![Review](screenshots/5-review.png)
+
 ## Requirements
 
 - Docker Desktop
