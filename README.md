@@ -1,14 +1,19 @@
-# ShoeRAG Web
+# Forensic footwear retrieval system
 
-Local forensic footwear retrieval: a React/TypeScript UI and a Django REST Framework API. Investigators add image folders, index them, and search by image or text. Matches sit on a case and can be rated, noted, or approved.
+Forensic footwear retrieval system
+Forensic footwear retrieval is a React/TypeScript UI backed by a Django REST Framework API. Investigators add image folders to a forensic case, index them, and search by image, text, or shape. Matches attach to the case and can be rated, annotated, or approved as collected evidence.
+Images are stored once by SHA-256 digest. Each corpus listing is a separate EvidenceFile, so the same file can appear in two collections without duplicating bytes or vectors. 
 
-Images are stored once by SHA-256 digest (`ContentObject`). Each corpus listing is a separate `EvidenceFile`, so the same file can appear in two collections without duplicating bytes or vectors. Search uses PostgreSQL with pgvector and Celery. Request validation is DRF serializers at the API boundary, not Pydantic.
+Search uses AI/ML Algorithm that we develop and uses  four fine-tuned models:YOLO, CLIP (semantic), DINOv2 (visual/texture), and the VLM Qwen2-VL-2B-Instruct (brand, colour, corpus, case), to retrieve forensic data from PostgreSQL with pgvector and Celery, then rank and return a top-k list of similar images across cases and scenarios. Request validation is handled by DRF serializers at the API boundary, not Pydantic (Pydantic is the usual choice with FastAPI).
 
-This is a local demo. No evidence images or private specs are in the repo. Seed passwords equal usernames. Use `127.0.0.1`, not `localhost`.
 
-## Celery
+Ranking fuses CLIP  and DINOv2  as s_model = λ × s_DINO + (1−λ) × s_CLIP, then blends metadata as s_final = α × s_model + (1−α) × s_meta. Lambda weights DINO versus CLIP; alpha weights visual score versus metadata.
 
-Celery runs ingest, encode, search, and report jobs so the API does not block. Redis is the broker. Progress is stored in PostgreSQL (`TaskRun`), not a Celery result backend. Without the worker, those jobs queue and never finish.
+
+## Backend: Django DRF REST Framework API, Celery, Redis, PostgreSQL.
+## Front end: React & Typescript
+
+HTTPS requests from React to Django DRF are accepted immediately with secure layer, then Celery runs ingest, encode, search, and report jobs so the API stays non-blocking. Redis is the message broker. Job progress is stored in PostgreSQL (TaskRun), not a Celery result backend. If the worker is down, jobs queue and never finish.
 
 ## Requirements
 
