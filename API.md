@@ -2,13 +2,13 @@
 
 This document is the contract the React UI uses against Django REST Framework. It lists the endpoints each screen calls, the JSON the serializers return, and TypeScript examples copied from those pages.
 
-Interactive schema after login: `http://127.0.0.1:8000/api/v1/docs/` (OpenAPI at `/api/v1/schema/`). Use that for field-level schema. Use this file for how the UI actually calls the API.
+Interactive schema after login: `/api/v1/docs/` on the API origin (OpenAPI at `/api/v1/schema/`). Use that for field-level schema. Use this file for how the UI actually calls the API.
 
 Validation at the HTTP boundary is DRF serializers, not Pydantic. Types on the client live in `frontend/src/api.ts`.
 
 ## How the UI calls the API
 
-Every request goes through `api<T>()` in `frontend/src/api.ts`. Vite on `http://127.0.0.1:5173` proxies `/api` and `/files` to Django on `http://127.0.0.1:8000`. Pages never call `:8000` directly.
+Every request goes through `api<T>()` in `frontend/src/api.ts`. The UI origin proxies `/api` and `/files` to the Django API. Pages call relative `/api/v1/…` paths only.
 
 ```ts
 import { api, ApiError } from "./api";
@@ -54,7 +54,7 @@ Unsafe methods (`POST`, `PATCH`, `DELETE`) require CSRF. Login therefore starts 
 
 `RequireSession` (`frontend/src/screens/RequireSession.tsx`) gates every route except `/login`. It calls `GET /api/v1/auth/session/`. A 401 sends the user to `/login`. An `mfa-incomplete` type sends them to `/login/mfa`.
 
-Seed demo accounts (password equals username): `investigator`, `administrator`. The local demo does not force MFA after password; the MFA routes below exist in the UI and API.
+Example accounts (password equals username): `investigator`, `administrator`. MFA after password is controlled by server settings (`MFA_CHALLENGE_AFTER_PASSWORD`); the MFA routes below exist in the UI and API.
 
 Roles: `administrator`, `investigator`, `analyst`, `reviewer`, `auditor`.
 
@@ -478,7 +478,7 @@ const { recovery_codes } = await api<{ recovery_codes: string[] }>(
 
 ## Datasets (`DatasetsPage.tsx`)
 
-Investigator adds a local folder to a corpus. Creating a mount also queues `datasets.scan_mount` on Celery. Progress is polled via the shell Task Centre.
+Investigator adds a folder mount to a corpus. Creating a mount also queues `datasets.scan_mount` on Celery. Progress is polled via the shell Task Centre.
 
 `GET /api/v1/corpora/?page_size=100`  
 IsAuthenticated. Paginated `CorpusRow[]`.
@@ -487,10 +487,10 @@ IsAuthenticated. Paginated `CorpusRow[]`.
 IsAuthenticated. Paginated `MountRow[]`.
 
 `POST /api/v1/mounts/`  
-IsInvestigator. Path is resolved and validated as a local folder (`storage.resolve_local_folder`). Inactive corpus is rejected.
+IsInvestigator. Path is resolved and validated as an existing readable folder. Inactive corpus is rejected.
 
 ```json
-{ "corpus": 1, "path": "D:\\\\evidence\\\\ndfsim", "label": "NDFsim" }
+{ "corpus": 1, "path": "/data/evidence/ndfsim", "label": "NDFsim" }
 ```
 
 201 `MountRow`. Scan starts immediately.
@@ -804,7 +804,7 @@ const approval = await api<{ state: string }>("/api/v1/review/approvals/", {
 
 ## Signed images (`SignedThumb.tsx`)
 
-Bytes are not served as raw `/media/` paths. The UI posts for a short-lived grant (default TTL 600 seconds, `SIGNED_URL_TTL_SECONDS`), then uses `grant.url` (usually `/files/{token}`, proxied by Vite).
+Bytes are not served as raw `/media/` paths. The UI posts for a short-lived grant (default TTL 600 seconds, `SIGNED_URL_TTL_SECONDS`), then uses `grant.url` (usually `/files/{token}` on the same origin).
 
 `POST /api/v1/evidence/{public_id}/access-url/`  
 IsAuthenticated. Records `EVIDENCE_URL_ISSUED`.
@@ -1009,7 +1009,7 @@ This is the investigator path the screens implement. Celery must be running for 
 ```ts
 import { api, CaseRow, CorpusRow, LoginResult, QueryRow, ResultRow, RunRow } from "./api";
 
-async function investigatorDemo(probe: File) {
+async function runInvestigatorFlow(probe: File) {
   await api("/api/v1/auth/csrf/");
   await api<LoginResult>("/api/v1/auth/login/", {
     method: "POST",
@@ -1024,7 +1024,7 @@ async function investigatorDemo(probe: File) {
 
   const caseRow = await api<CaseRow>("/api/v1/cases/", {
     method: "POST",
-    body: JSON.stringify({ name: "Demo case" }),
+    body: JSON.stringify({ name: "Investigation 2026-001" }),
   });
 
   const run = await api<RunRow>(`/api/v1/cases/${caseRow.public_id}/runs/`, {
